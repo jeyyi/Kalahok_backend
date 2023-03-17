@@ -1,5 +1,6 @@
 from nltk import bigrams
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Response
+from wordcloud import WordCloud
 from typing import List
 import operator
 import xlsxwriter, io, re
@@ -24,6 +25,7 @@ import tempfile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
+from io import BytesIO
 app = FastAPI()
 
 # Allow CORS
@@ -37,19 +39,8 @@ app.add_middleware(
 
 db:List[str]=[
 ]
-
-@app.get("/")
-def read_root():
-    return {"Hello":"World"}
-
-@app.post("/thematic-analysis")
-async def add_txt(txt: str):
-    db.append(txt)
-    return {"Text addedd:":txt}
-
-
-@app.get("/thematic-analysis")
-async def thematic_analysis():
+    
+def get_words():
     nltk.download('stopwords')
     nltk.download('punkt')
     stop_words = set(stopwords.words('english'))
@@ -76,6 +67,22 @@ async def thematic_analysis():
         comment_list.append(t)
     comment_list = list(filter(None, comment_list))
     comment_list = [text.split() for text in comment_list]
+    return (comment_list)
+
+
+@app.get("/")
+def read_root():
+    return {"Hello":"World"}
+
+@app.post("/thematic-analysis")
+async def add_txt(txt: str):
+    db.append(txt)
+    return {"Text addedd:":txt}
+
+
+@app.get("/thematic-analysis")
+async def thematic_analysis():
+    comment_list = get_words()
     K = 6
     alpha_val = 0.05
     beta_val = 0.1
@@ -125,34 +132,7 @@ async def thematic_analysis():
 @app.get("/bigram")
 async def bigram_analysis():
     from nltk import bigrams
-    nltk.download('stopwords')
-    nltk.download('punkt')
-    stop_words = set(stopwords.words('english'))
-    stop_words_tl = []
-    crimefile = open('tagalog_stopwords.txt', 'r')
-    tl = crimefile.readlines()
-    for textl in tl:
-        textl = re.sub('\n','',textl)
-        stop_words_tl.append(textl)
-    #removing empty strings
-    while("" in stop_words_tl) :
-        stop_words_tl.remove("")
-    stop_words_tl.extend(list(stopwords.words('english')))
-    comment_list = []
-    for txt in db:
-        t = txt.replace('\n', '')
-        t = t.strip().lower()
-        t = p.clean(t)
-        t = word_tokenize(t)
-        t = " ".join(w for w in t if w not in stop_words_tl)
-        t= word_tokenize(t)
-        t = re.sub('[^a-zA-Z0-9 ]', '', str(t))
-        t = re.sub('\b\w{1,3}\b', '', str(t))
-        comment_list.append(t)
-    comment_list = list(filter(None, comment_list))
-    comment_list = [text.split() for text in comment_list]
-
-    #comment_list = [x for x in comment_list if x]
+    comment_list = get_words()
     # Create list of lists containing bigrams in the data
     terms_bigram = [list(bigrams(doc)) for doc in comment_list]
 
@@ -207,3 +187,25 @@ async def bigram_analysis():
         fig.savefig(tmp_file.name)
 
     return StreamingResponse(open(tmp_file.name, "rb"), media_type="image/png")
+
+
+@app.get("/wordcloud")
+async def get_wordcloud():
+    if not db:
+        raise HTTPException(status_code=400, detail="No words provided")
+    
+    # Join the list of words into a single string
+    text = " ".join(db)
+    
+    # Generate the wordcloud image
+    wc = WordCloud(width=800, height=400, background_color="white").generate(text)
+    plt.imshow(wc, interpolation='bilinear')
+    plt.axis("off")
+    
+    # Save the image to a byte buffer
+    buffer = BytesIO()
+    plt.savefig(buffer, format="png")
+    buffer.seek(0)
+    
+    # Return the image as a response with the appropriate media type
+    return Response(content=buffer.getvalue(), media_type="image/png")
