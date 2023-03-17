@@ -1,3 +1,4 @@
+from nltk import bigrams
 from fastapi import FastAPI
 from typing import List
 import operator
@@ -14,7 +15,15 @@ import pandas as pd
 import numpy as np
 import json
 import pickle
+import itertools
+import collections
+import networkx as nx
+import io
+import matplotlib.pyplot as plt
+import tempfile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 app = FastAPI()
 
 # Allow CORS
@@ -112,3 +121,89 @@ async def thematic_analysis():
     #df.to_excel("GSDMM_output.xlsx", index=False)
     df.sort_values(['occurrence'])
     return json.loads(df.to_json(orient='records'))
+
+@app.get("/bigram")
+async def bigram_analysis():
+    from nltk import bigrams
+    nltk.download('stopwords')
+    nltk.download('punkt')
+    stop_words = set(stopwords.words('english'))
+    stop_words_tl = []
+    crimefile = open('tagalog_stopwords.txt', 'r')
+    tl = crimefile.readlines()
+    for textl in tl:
+        textl = re.sub('\n','',textl)
+        stop_words_tl.append(textl)
+    #removing empty strings
+    while("" in stop_words_tl) :
+        stop_words_tl.remove("")
+    stop_words_tl.extend(list(stopwords.words('english')))
+    comment_list = []
+    for txt in db:
+        t = txt.replace('\n', '')
+        t = t.strip().lower()
+        t = p.clean(t)
+        t = word_tokenize(t)
+        t = " ".join(w for w in t if w not in stop_words_tl)
+        t= word_tokenize(t)
+        t = re.sub('[^a-zA-Z0-9 ]', '', str(t))
+        t = re.sub('\b\w{1,3}\b', '', str(t))
+        comment_list.append(t)
+    comment_list = list(filter(None, comment_list))
+    comment_list = [text.split() for text in comment_list]
+
+    #comment_list = [x for x in comment_list if x]
+    # Create list of lists containing bigrams in the data
+    terms_bigram = [list(bigrams(doc)) for doc in comment_list]
+
+    # Flatten list of bigrams in clean tweets
+    bigrams = list(itertools.chain(*terms_bigram))
+
+    # Create counter of words in clean bigrams
+    bigram_counts = collections.Counter(bigrams)
+
+    bigram_counts.most_common(30)
+
+    bigram_df = pd.DataFrame(bigram_counts.most_common(30),columns=['bigram', 'count'])
+    #bigram_df.to_excel("bigram_output.xlsx", index=False)
+
+    # Create dictionary of bigrams and their counts
+    d = bigram_df.set_index('bigram').T.to_dict('records')
+
+    # Create network plot 
+    G = nx.Graph()
+
+    # Create connections between nodes
+    for k, v in d[0].items():
+        G.add_edge(k[0], k[1], weight=(v * 10))
+
+    fig, ax = plt.subplots(figsize=(12, 12))
+    fig.suptitle('Word Bigram Co-occurence Network', fontsize=22, y=1.05) 
+    fig.tight_layout()    
+
+    ax.axis("off")
+
+    pos = nx.spring_layout(G, k=1)
+
+    # Plot networks
+    nx.draw_networkx(G, pos,
+                    font_size=11,
+                    width=1,
+                    edge_color='black',
+                    node_color='tab:red',
+                    with_labels = False,
+                    ax=ax)
+
+    # Create offset labels
+    for key, value in pos.items():
+        x, y = value[0], value[1]+.06
+        ax.text(x, y,
+                s=key,
+                bbox=dict(facecolor='tab:red', alpha=0.1),
+                horizontalalignment='center', fontsize=11)
+
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+        fig.savefig(tmp_file.name)
+
+    return StreamingResponse(open(tmp_file.name, "rb"), media_type="image/png")
