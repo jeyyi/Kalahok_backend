@@ -14,12 +14,20 @@ import pandas as pd
 import numpy as np
 import json
 import pickle
+from fastapi.middleware.cors import CORSMiddleware
 app = FastAPI()
+
+# Allow CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 db:List[str]=[
 ]
-
-
 
 @app.get("/")
 def read_root():
@@ -31,7 +39,7 @@ async def add_txt(txt: str):
     return {"Text addedd:":txt}
 
 
-@app.get("/thematic-analaysis")
+@app.get("/thematic-analysis")
 async def thematic_analysis():
     nltk.download('stopwords')
     nltk.download('punkt')
@@ -103,4 +111,4 @@ async def thematic_analysis():
     df = pd.DataFrame(data, columns = ['cluster_num', 'topic_word', 'occurrence']) 
     #df.to_excel("GSDMM_output.xlsx", index=False)
     df.sort_values(['occurrence'])
-    return df.to_json(orient='records')[1:-1].replace('},{', '} {')
+    return json.loads(df.to_json(orient='records'))
