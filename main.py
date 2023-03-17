@@ -1,5 +1,6 @@
 from nltk import bigrams
 from fastapi import FastAPI, HTTPException, Response
+from typing import Dict
 from wordcloud import WordCloud
 from typing import List
 import operator
@@ -26,6 +27,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.responses import StreamingResponse
 from io import BytesIO
+import json
+from collections import Counter
 app = FastAPI()
 
 # Allow CORS
@@ -209,3 +212,27 @@ async def get_wordcloud():
     
     # Return the image as a response with the appropriate media type
     return Response(content=buffer.getvalue(), media_type="image/png")
+
+@app.get('/frequent')
+#returns top 10 words
+async def get_frequent() -> Dict:
+    # Combine all strings into one long string
+    result = [word for sublist in get_words() for word in sublist]
+    combined_string = ' '.join(result)
+
+    # Split the long string into individual words
+    words = combined_string.split()
+
+    # Count the occurrences of each word
+    word_counts = Counter(words)
+
+    # Get the top 10 most frequent words
+    top_10 = word_counts.most_common(10)
+
+    # Create a dictionary to store the results
+    results = {}
+    for word, count in top_10:
+        results[word] = count
+
+    # Return the dictionary as JSON
+    return results
