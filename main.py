@@ -130,7 +130,15 @@ async def thematic_analysis():
     df = pd.DataFrame(data, columns = ['cluster_num', 'topic_word', 'occurrence']) 
     #df.to_excel("GSDMM_output.xlsx", index=False)
     df.sort_values(['occurrence'])
-    return json.loads(df.to_json(orient='records'))
+    sample =  json.loads(df.to_json(orient='records'))
+
+    clusters = {}
+    for item in sample:
+        if item['cluster_num'] not in clusters:
+            clusters[item['cluster_num']] = {'cluster_num': item['cluster_num'], 'topic_words': item['topic_word']}
+        else:
+            clusters[item['cluster_num']]['topic_words'] += f",{item['topic_word']}"
+    return list(clusters.values())
 
 @app.get("/bigram")
 async def bigram_analysis():
@@ -215,7 +223,7 @@ async def get_wordcloud():
 
 @app.get('/frequent')
 #returns top 10 words
-async def get_frequent() -> Dict:
+async def get_frequent() -> List:
     # Combine all strings into one long string
     result = [word for sublist in get_words() for word in sublist]
     combined_string = ' '.join(result)
@@ -235,4 +243,8 @@ async def get_frequent() -> Dict:
         results[word] = count
 
     # Return the dictionary as JSON
-    return results
+    lst=[]
+    for key in results:
+        temp = {"word":key, "number":results[key]}
+        lst.append(temp)
+    return(lst)
