@@ -1,34 +1,38 @@
-from nltk import bigrams
-from fastapi import FastAPI, HTTPException, Response
-from typing import Dict
-from wordcloud import WordCloud
-from typing import List
-import operator
-import xlsxwriter, io, re
-import sys
-import nltk
-import preprocessor as p
-from gsdmm import MovieGroupProcess
-from nltk.tokenize import word_tokenize
-from pydantic import BaseModel
-from nltk.tokenize import word_tokenize
-from nltk.corpus import stopwords
-import pandas as pd
-import numpy as np
+import collections
+import itertools
 import json
 import pickle
-import itertools
-import collections
-import networkx as nx
-import io
-import matplotlib.pyplot as plt
+import re
 import tempfile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.responses import StreamingResponse
-from io import BytesIO
-import json
 from collections import Counter
+from io import BytesIO
+from typing import Dict, List
+
+import matplotlib.pyplot as plt
+import networkx as nx
+import nltk
+import numpy as np
+import pandas as pd
+import preprocessor as p
+from fastapi import FastAPI, HTTPException, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, StreamingResponse
+from gsdmm import MovieGroupProcess
+from nltk import bigrams
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from pydantic import BaseModel
+from wordcloud import WordCloud
+from pymongo import MongoClient
+
+# Connect to your MongoDB cluster
+client = MongoClient("mongodb://localhost:27017")
+db = client["Sales"]
+collection = db["employees"]
+
+
+nltk.download('stopwords')
+nltk.download('punkt')
 app = FastAPI()
 
 # Allow CORS
@@ -40,12 +44,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-db:List[str]=[
-]
+def get_text_list():
+    # Query for all documents in the collection and project only the "text" field
+    cursor = collection.find({}, {"What other issues affecting the youth do you think should also be prioritized?": 1})
+
+    # Extract the "text" field from each document and add it to a list
+    text_list = [doc["What other issues affecting the youth do you think should also be prioritized?"] for doc in cursor]
+
+    # Return the list of text strings
+    return text_list
+
+db:List[str] = get_text_list()
     
 def get_words():
-    nltk.download('stopwords')
-    nltk.download('punkt')
     stop_words = set(stopwords.words('english'))
     stop_words_tl = []
     crimefile = open('tagalog_stopwords.txt', 'r')
@@ -75,13 +86,16 @@ def get_words():
 
 @app.get("/")
 def read_root():
-    return {"Hello":"World"}
+    return {"Hello":"Mundo"}
 
 @app.post("/thematic-analysis")
 async def add_txt(txt: str):
     db.append(txt)
     return {"Text addedd:":txt}
 
+@app.get("/get-all-text")
+async def get_texts():
+    return get_text_list()
 
 @app.get("/thematic-analysis")
 async def thematic_analysis():
@@ -143,6 +157,9 @@ async def thematic_analysis():
 @app.get("/bigram")
 async def bigram_analysis():
     from nltk import bigrams
+    """
+    This function returns a temporary streaming response png file of a bigram based on all the texts from the database.
+    """
     comment_list = get_words()
     # Create list of lists containing bigrams in the data
     terms_bigram = [list(bigrams(doc)) for doc in comment_list]
