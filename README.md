@@ -1,4 +1,4 @@
-# Backend of NLP part of Kalahok E participation 2.0
+# FASTAPI for BosesKO
 ## Prerequisites
 Before you get started, make sure you have the following installed:
 
