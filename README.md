@@ -36,7 +36,7 @@ This will install all the packages listed in your requirements.txt file.
 ### Step 5: Start the app
 To start the FastAPI app, navigate to the directory containing the app and run the following command:
  
-#### uvicorn app.main:app --reload
+#### uvicorn main:app --reload
 This will start the development server and automatically reload the app whenever you make changes to the code.
 
 You can now visit http://localhost:8000 in your web browser to see your app in action!
